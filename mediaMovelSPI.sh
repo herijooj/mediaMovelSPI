@@ -82,10 +82,22 @@ process_single_file() {
 }
 
 print_usage() {
-    echo ""
-    echo "Uso: mediaMovelSPI [ARQ_CTL_ENTRADA ou DIRETORIO] [-o DIRETORIO_SAIDA]"
-    echo "     Se -o não for especificado, será usado o diretório '[arqin]_mmSPI'"
-    echo ""
+    echo -e "${BOLD}USO:${NC}"
+    echo -e "  ${GREEN}mediaMovelSPI${NC} ${YELLOW}[ENTRADA]${NC} ${CYAN}[OPÇÕES]${NC}\n"
+    
+    echo -e "${BOLD}ENTRADA:${NC}"
+    echo -e "  ${YELLOW}ARQ_CTL_ENTRADA${NC}  Arquivo .ctl individual para processar"
+    echo -e "  ${YELLOW}DIRETORIO${NC}        Diretório contendo arquivos .ctl para processamento em lote\n"
+    
+    echo -e "${BOLD}OPÇÕES:${NC}"
+    echo -e "  ${CYAN}-o, --output${NC} DIR   Define o diretório de saída"
+    echo -e "  ${CYAN}-h, --help${NC}         Mostra esta mensagem de ajuda"    
+    echo -e "${BOLD}OBSERVAÇÕES:${NC}"
+    echo -e "  • Se ${CYAN}-o${NC} não for especificado, será usado o diretório '${GRAY}[entrada]_mmSPI${NC}'"
+    echo -e "  • O número de meses SPI é extraído automaticamente do nome do arquivo\n"
+    
+    echo -e "${BOLD}EXEMPLO:${NC}"
+    echo -e "  ${GREEN}mediaMovelSPI${NC} ${YELLOW}dados/spi3.ctl${NC} ${CYAN}-o saida/processado${NC}\n"
 }
 
 OUTPUT_DIR=""
@@ -108,7 +120,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ -z "$INPUT" ]; then
-    echo "ERRO! Arquivo de entrada não especificado!"
+    echo -e "${RED}[FALHA]${NC} Arquivo de entrada não especificado!"
     print_usage
     exit 1
 fi
