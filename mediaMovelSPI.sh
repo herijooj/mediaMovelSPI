@@ -22,16 +22,6 @@ then
     set_colors
 fi
 
-extract_spi_months() {
-    local filename=$1
-    local spi_months=$(echo "$filename" | grep -o "spi[0-9]\+" | grep -o "[0-9]\+")
-    if [ -z "$spi_months" ]; then
-        echo "ERRO: Não foi possível extrair o número de meses SPI do nome do arquivo: $filename"
-        exit 1
-    fi
-    echo "$spi_months"
-}
-
 ensure_output_dir() {
     local output_dir=$1
     if [ ! -d "$output_dir" ]; then
@@ -46,7 +36,6 @@ ensure_output_dir() {
 process_single_file() {
     local ARQ_CTL_IN=$1
     local OUTPUT_DIR=$2
-    local N_MESES_SPI=$(extract_spi_months "$(basename "$ARQ_CTL_IN")")
 
     echo -e "\n${BOLD}${PURPLE}=== Processando arquivo: ${CYAN}$(basename "$ARQ_CTL_IN")${NC} ===\n"
 
@@ -62,21 +51,22 @@ process_single_file() {
     UNDEF=$(cat ${ARQ_CTL_IN} | grep undef | tr  "\t" " " | tr -s " " | cut -d" " -f2)
     VAR=$(grep -A1 -i -w '^vars' ${ARQ_CTL_IN} | tail -n1 | awk '{print $1}')
 
-    echo -e "${BLUE}[CONFIG]${NC} Processando com ${YELLOW}$N_MESES_SPI${NC} meses de SPI"
     echo -e "${GRAY}[INFO]${NC} Executando média móvel..."
 
-    if $SCRIPT_DIR/bin/media_movel ${ARQ_BIN_IN} ${NX} ${NY} ${NZ} ${NT} ${UNDEF} ${N_MESES_SPI} ${ARQ_BIN_OUT}; then
-        echo -e "${GREEN}[SUCESSO]${NC} Média móvel calculada com sucesso"
-    else
-        echo -e "${RED}[FALHA]${NC} Erro no cálculo da média móvel"
-        exit 1
-    fi
+    # Loop para cada intervalo
+    for N_MESES_SPI in "${MEDIA_MOVEL_INTERVALS[@]}"; do
+        ARQ_BIN_OUT="${OUTPUT_DIR}/$(basename $ARQ_BIN_IN .bin)_mmSPI${N_MESES_SPI}.bin"
+        if $SCRIPT_DIR/bin/media_movel ${ARQ_BIN_IN} ${NX} ${NY} ${NZ} ${NT} ${UNDEF} ${N_MESES_SPI} ${ARQ_BIN_OUT}; then
+            echo -e "${GREEN}[SUCESSO]${NC} Média móvel ${N_MESES_SPI} calculada"
+        else
+            echo -e "${RED}[FALHA]${NC} Erro na média móvel ${N_MESES_SPI}"
+            exit 1
+        fi
 
-    # Criar arquivo de controle de saída
-    ARQ_CTL_OUT="${OUTPUT_DIR}/$(basename $ARQ_CTL_IN .ctl)_mmSPI${N_MESES_SPI}.ctl"
-    echo -e "${GRAY}[INFO]${NC} Gerando arquivo de controle..."
-    cp $ARQ_CTL_IN $ARQ_CTL_OUT
-    sed -i "s#$(basename $ARQ_BIN_IN .bin)#$(basename $ARQ_BIN_OUT .bin)#g" ${ARQ_CTL_OUT}
+        ARQ_CTL_OUT="${OUTPUT_DIR}/$(basename $ARQ_CTL_IN .ctl)_mmSPI${N_MESES_SPI}.ctl"
+        cp $ARQ_CTL_IN $ARQ_CTL_OUT
+        sed -i "s#$(basename $ARQ_BIN_IN .bin)#$(basename $ARQ_BIN_OUT .bin)#g" ${ARQ_CTL_OUT}
+    done
 
     echo -e "${GRAY}─────────────────────────────────────────${NC}"
 }
@@ -91,6 +81,7 @@ print_usage() {
     
     echo -e "${BOLD}OPÇÕES:${NC}"
     echo -e "  ${CYAN}-o, --output${NC} DIR   Define o diretório de saída"
+    echo -e "  ${CYAN}-m, --meses${NC} NUMS   Intervalor customizado de meses (ex: 1 3 6)"
     echo -e "  ${CYAN}-h, --help${NC}         Mostra esta mensagem de ajuda"    
     echo -e "${BOLD}OBSERVAÇÕES:${NC}"
     echo -e "  • Se ${CYAN}-o${NC} não for especificado, será usado o diretório '${GRAY}[entrada]_mmSPI${NC}'"
@@ -101,12 +92,20 @@ print_usage() {
 }
 
 OUTPUT_DIR=""
+MEDIA_MOVEL_INTERVALS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         -o|--output)
             OUTPUT_DIR="$2"
             shift 2
+            ;;
+        -m|--meses)
+            shift
+            while [[ $# -gt 0 && ! $1 =~ ^- ]]; do
+                MEDIA_MOVEL_INTERVALS+=("$1")
+                shift
+            done
             ;;
         -h|--help)
             print_usage
@@ -119,6 +118,11 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Se nenhum intervalo for passado, usar padrao
+if [ ${#MEDIA_MOVEL_INTERVALS[@]} -eq 0 ]; then
+    MEDIA_MOVEL_INTERVALS=(1 3 6 9 12 24 48 60)
+fi
+
 if [ -z "$INPUT" ]; then
     echo -e "${RED}[FALHA]${NC} Arquivo de entrada não especificado!"
     print_usage
@@ -127,7 +131,7 @@ fi
 
 if [ -z "$OUTPUT_DIR" ]; then
     #output_dir vai ser uma nova pasta com o nome do arquivo de entrada + _mmSPI
-    OUTPUT_DIR="$(dirname "$INPUT")/$(basename "$INPUT" .ctl)_mmSPI"
+    OUTPUT_DIR="$(pwd)/$(basename "$INPUT" .ctl)_mmSPI"
 fi
 
 ensure_output_dir "$OUTPUT_DIR"
@@ -142,6 +146,6 @@ if [ -d "$INPUT" ]; then
 elif [ -f "$INPUT" ]; then
     process_single_file "$INPUT" "$OUTPUT_DIR"
 else
-    echo "ERRO: '$INPUT' não é um arquivo ou diretório válido"
+    echo "${RED}[FALHA]${NC}ERRO: '$INPUT' não é um arquivo ou diretório válido"
     exit 1
 fi
